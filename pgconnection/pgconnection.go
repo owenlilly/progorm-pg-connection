@@ -2,28 +2,38 @@ package pgconnection
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/lib/pq"
-	"github.com/owenlilly/progorm/connection"
+	"github.com/owenlilly/progorm-connection/connection"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+var ErrInvalidConnectionString = errors.New("invalid postgres connection string")
 
 type postgresConnectionManager struct {
 	connection.Manager
 }
 
-// NewPostgresConnectionManager create a new instance of the Postgres implementation of the Manager interface.
-func NewPostgresConnectionManager(connString string, config *gorm.Config) connection.Manager {
+// MustNewPostgresConnectionManager create a new instance of the Postgres implementation of the Manager interface.
+func MustNewPostgresConnectionManager(connString string, config *gorm.Config) connection.Manager {
 	dialector := postgres.Open(connString)
+	return connection.MustNewBaseConnectionManager(connString, dialector, config)
+}
+
+// NewPostgresConnectionManager create a new instance of the Postgres implementation of the Manager interface.
+func NewPostgresConnectionManager(connString string, config *gorm.Config) (connection.Manager, error) {
+	dialector := postgres.Open(connString)
+	conn, err := connection.NewBaseConnectionManager(connString, dialector, config)
 	connMan := &postgresConnectionManager{
-		Manager: connection.NewBaseConnectionManager(connString, dialector, config),
+		Manager: conn,
 	}
 
-	return connMan
+	return connMan, err
 }
 
 // MakePostgresConnString build Postgres connection string from individual credential parts
@@ -64,7 +74,7 @@ func CreateDbIfNotExists(connString string, defaultDBs ...string) error {
 	re := regexp.MustCompile(`(?m)postgres://.+:?\d?/(\w+)`)
 	matches := re.FindStringSubmatch(connString)
 	if len(matches) != 2 {
-		return connection.ErrInvalidConnectionString
+		return ErrInvalidConnectionString
 	}
 	dbName := matches[1]
 	if dbName == defaultDB {
